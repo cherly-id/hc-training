@@ -42,11 +42,12 @@ return new class extends Component
     public function showDetail($trainerName)
     {
         $this->selectedTrainerName = $trainerName;
-        
-        $this->trainerDetails = DB::table('trainings')
-            ->where(function($q) use ($trainerName) {
-                $q->where('trainer_internal_name', $trainerName)
-                  ->orWhere('trainer_external_name', $trainerName);
+
+        $this->trainerDetails = DB::table('trainings as t')
+            ->leftJoin('employees as tr', 't.trainer_employee_id', '=', 'tr.id')
+            ->where(function ($q) use ($trainerName) {
+                $q->where('tr.name', $trainerName)
+                    ->orWhere('t.trainer_external_name', $trainerName);
             })
             ->when($this->date_from, fn($q) => $q->whereDate('training_date', '>=', $this->date_from))
             ->when($this->date_to, fn($q) => $q->whereDate('training_date', '<=', $this->date_to))
@@ -66,18 +67,10 @@ return new class extends Component
     private function getBaseQuery()
     {
         $query = DB::table('trainings as t')
-            // JOIN ke employees dengan memotong NIK (mengambil teks setelah ' - ')
-            ->leftJoin('employees as e', function ($join) {
-                $join->on(
-                    DB::raw("TRIM(SUBSTRING_INDEX(t.trainer_internal_name, ' - ', -1)) COLLATE utf8mb4_unicode_ci"),
-                    '=',
-                    DB::raw("e.name COLLATE utf8mb4_unicode_ci")
-                );
-            })
-            ->leftJoin('organizations as o', 'e.org_id', '=', 'o.id')
+            ->leftJoin('employees as tr', 't.trainer_employee_id', '=', 'tr.id')
+            ->leftJoin('organizations as o', 'tr.org_id', '=', 'o.id')
             ->select(
-                DB::raw('COALESCE(t.trainer_internal_name, t.trainer_external_name) as trainer_name'),
-                // Ambil Nama Departemen (Organization)
+                DB::raw('COALESCE(tr.name, t.trainer_external_name) as trainer_name'),
                 DB::raw('COALESCE(o.org_name, "-") as organization'),
                 DB::raw("GROUP_CONCAT(DISTINCT t.activity_name SEPARATOR ', ') as activity_name"),
                 DB::raw("GROUP_CONCAT(DISTINCT t.skill_name SEPARATOR ', ') as skill_name"),
@@ -86,7 +79,8 @@ return new class extends Component
 
         if (!empty($this->search)) {
             $query->where(function ($q) {
-                $q->where('t.trainer_internal_name', 'like', '%' . $this->search . '%')
+                
+                $q->where('tr.name', 'like', '%' . $this->search . '%')
                     ->orWhere('t.trainer_external_name', 'like', '%' . $this->search . '%')
                     ->orWhere('o.org_name', 'like', '%' . $this->search . '%');
             });
@@ -96,8 +90,9 @@ return new class extends Component
             $query->whereBetween('t.training_date', [$this->date_from, $this->date_to]);
         }
 
+     
         $query->groupBy(
-            't.trainer_internal_name',
+            'tr.name',
             't.trainer_external_name',
             'o.org_name'
         )
@@ -124,20 +119,17 @@ return new class extends Component
 
     public function render()
     {
-        // Ambil list trainer unik untuk dropdown filter
-        $trainerList = DB::table('trainings')
-            ->select(DB::raw('COALESCE(trainer_internal_name, trainer_external_name) as name'))
-            ->whereNotNull('trainer_internal_name')
-            ->orWhereNotNull('trainer_external_name')
+        $trainerList = DB::table('trainings as t')
+            ->leftJoin('employees as tr', 't.trainer_employee_id', '=', 'tr.id')
+            ->select(DB::raw('COALESCE(tr.name, t.trainer_external_name) as name'))
             ->distinct()
+            ->whereNotNull(DB::raw('COALESCE(tr.name, t.trainer_external_name)'))
             ->orderBy('name', 'asc')
             ->get();
 
-        $contributions = $this->getBaseQuery()->paginate(10);
-        
         return view('components.trainer-contribution.⚡trainer-contribution.trainer-contribution', [
-            'contributions' => $contributions,
-            'trainerList' => $trainerList // Kirim data ke view
+            'contributions' => $this->getBaseQuery()->paginate(10),
+            'trainerList' => $trainerList
         ]);
     }
 };

@@ -71,14 +71,14 @@ new class extends Component {
     public function addSelectedParticipant($id)
     {
         $emp = DB::table('employees as e')
-        ->leftJoin('organizations as o', 'e.org_id', '=', 'o.id')
-        ->where('e.id', $id)
-        ->select(
-            'e.id', 
-            'e.name', 
-            'e.nik', 
-            DB::raw("IFNULL(o.org_name, 'DEPT TIDAK TERDAFTAR') as org_name")
-        )
+            ->leftJoin('organizations as o', 'e.org_id', '=', 'o.id')
+            ->where('e.id', $id)
+            ->select(
+                'e.id',
+                'e.name',
+                'e.nik',
+                DB::raw("IFNULL(o.org_name, 'DEPT TIDAK TERDAFTAR') as org_name")
+            )
             ->first();
 
         if ($emp && !collect($this->selected_participants)->contains('id', $emp->id)) {
@@ -107,8 +107,7 @@ new class extends Component {
         $this->is_certified = $training->is_certified ?? 'No';
         $this->showFormModal = true;
 
-        // Logika Pintar: Mencocokkan Nama Database dengan Dropdown Layout
-        if ($training->trainer_internal_name) {
+        if ($training->trainer_employee_id) {
             $this->trainer_type = 'internal';
 
             // Cek apakah isi database mengandung NIK (format "NIK - Nama")
@@ -130,15 +129,15 @@ new class extends Component {
         }
 
         $this->selected_participants = DB::table('training_participants as tp')
-        ->join('employees as e', 'tp.employee_id', '=', 'e.id')
-        ->leftJoin('organizations as o', 'e.org_id', '=', 'o.id') // Join ke tabel org
-        ->where('tp.training_id', $id)
-        ->select(
-            'e.id', 
-            'e.name', 
-            'e.nik', 
-            DB::raw("IFNULL(o.org_name, 'DEPT TIDAK TERDAFTAR') as org_name")
-        )
+            ->join('employees as e', 'tp.employee_id', '=', 'e.id')
+            ->leftJoin('organizations as o', 'e.org_id', '=', 'o.id') // Join ke tabel org
+            ->where('tp.training_id', $id)
+            ->select(
+                'e.id',
+                'e.name',
+                'e.nik',
+                DB::raw("IFNULL(o.org_name, 'DEPT TIDAK TERDAFTAR') as org_name")
+            )
             ->get()
             ->map(fn($item) => (array)$item)
             ->toArray();
@@ -153,6 +152,12 @@ new class extends Component {
         ]);
 
         DB::transaction(function () {
+            $empId = null;
+            if ($this->trainer_type === 'internal' && $this->trainer_employee_id) {
+                $nik = explode(' - ', $this->trainer_employee_id)[0];
+                $emp = DB::table('employees')->where('nik', $nik)->first();
+                $empId = $emp ? $emp->id : null;
+            }
             $data = [
                 'title' => $this->title,
                 'held_by' => $this->held_by,
@@ -163,7 +168,7 @@ new class extends Component {
                 'finish_time' => $this->finish_time,
                 'fee' => $this->fee,
                 'is_certified' => $this->is_certified,
-                'trainer_internal_name' => $this->trainer_type === 'internal' ? $this->trainer_employee_id : null,
+                'trainer_employee_id' => $empId,
                 'trainer_external_name' => $this->trainer_type === 'external' ? $this->trainer_external_name : null,
                 'updated_at' => now(),
             ];

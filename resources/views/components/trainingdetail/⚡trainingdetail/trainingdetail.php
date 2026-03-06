@@ -54,9 +54,10 @@ new class extends Component
             ->join('employees as e', 'tp.employee_id', '=', 'e.id') 
             ->leftJoin('organizations as o', 'e.org_id', '=', 'o.id')
             ->leftJoin('positions as p', 'e.position_id', '=', 'p.id')
+            ->leftJoin('employees as tr', 't.trainer_employee_id', '=', 'tr.id')
             ->select(
                 'tp.id as participant_id',
-                'tp.score', // 🔥 Ditambahkan agar tidak error "Undefined property"
+                'tp.score', 
                 'e.nik',
                 'e.name as employee_name',
                 'o.org_name as department',
@@ -70,8 +71,8 @@ new class extends Component
                 't.activity_name',
                 't.skill_name',
                 't.is_certified',
-                't.trainer_internal_name',
-                't.trainer_external_name'
+                't.trainer_external_name',
+                'tr.name as trainer_internal_name'
             )
             ->when($this->search, function ($q) {
                 $q->where(function ($sub) {
@@ -128,7 +129,7 @@ new class extends Component
                     $row->finish_time,
                     $duration,
                     $row->fee,
-                    $row->score ?? 0, // 🔥 Pastikan score masuk ke export
+                    $row->score ?? 0, 
                     $row->is_certified
                 ];
                 
