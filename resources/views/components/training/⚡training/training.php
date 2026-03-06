@@ -91,57 +91,56 @@ new class extends Component {
     // LOAD TRAINING (PERBAIKAN DI SINI)
     // ==============================
     public function loadTraining($id)
-    {
-        $training = DB::table('trainings')->find($id);
-        if (!$training) return;
+{
+    $training = DB::table('trainings')->find($id);
+    if (!$training) return;
 
-        $this->training_id = $training->id;
-        $this->title = $training->title;
-        $this->held_by = $training->held_by;
-        $this->activity_name = $training->activity_name;
-        $this->skill_name = $training->skill_name;
-        $this->training_date = $training->training_date;
-        $this->start_time = $training->start_time;
-        $this->finish_time = $training->finish_time;
-        $this->fee = $training->fee;
-        $this->is_certified = $training->is_certified ?? 'No';
-        $this->showFormModal = true;
+    $this->training_id = $training->id;
+    $this->title = $training->title;
+    $this->held_by = $training->held_by;
+    $this->activity_name = $training->activity_name;
+    $this->skill_name = $training->skill_name;
+    $this->training_date = $training->training_date;
+    $this->start_time = $training->start_time;
+    $this->finish_time = $training->finish_time;
+    $this->fee = $training->fee;
+    $this->is_certified = $training->is_certified ?? 'No';
+    $this->showFormModal = true;
 
-        if ($training->trainer_employee_id) {
-            $this->trainer_type = 'internal';
+    
+    if ($training->trainer_employee_id) {
+        $this->trainer_type = 'internal';
 
-            // Cek apakah isi database mengandung NIK (format "NIK - Nama")
-            if (str_contains($training->trainer_internal_name, ' - ')) {
-                $this->trainer_employee_id = $training->trainer_internal_name;
-            } else {
-                // Jika hanya Nama (hasil import), cari NIK-nya agar Dropdown terpilih otomatis
-                $cek = DB::table('employees')
-                    ->where('name', 'like', '%' . $training->trainer_internal_name . '%')
-                    ->first();
+        // Cari data karyawan berdasarkan ID agar dropdown otomatis terpilih
+        $cek = DB::table('employees')->find($training->trainer_employee_id);
 
-                $this->trainer_employee_id = $cek ? ($cek->nik . ' - ' . $cek->name) : $training->trainer_internal_name;
-            }
-            $this->trainer_external_name = '';
+        if ($cek) {
+            // Set format ke "NIK - Nama" agar sinkron dengan dropdown modal 
+            $this->trainer_employee_id = $cek->nik . ' - ' . $cek->name;
         } else {
-            $this->trainer_type = 'external';
-            $this->trainer_external_name = $training->trainer_external_name;
             $this->trainer_employee_id = null;
         }
-
-        $this->selected_participants = DB::table('training_participants as tp')
-            ->join('employees as e', 'tp.employee_id', '=', 'e.id')
-            ->leftJoin('organizations as o', 'e.org_id', '=', 'o.id') // Join ke tabel org
-            ->where('tp.training_id', $id)
-            ->select(
-                'e.id',
-                'e.name',
-                'e.nik',
-                DB::raw("IFNULL(o.org_name, 'DEPT TIDAK TERDAFTAR') as org_name")
-            )
-            ->get()
-            ->map(fn($item) => (array)$item)
-            ->toArray();
+        $this->trainer_external_name = '';
+    } else {
+        $this->trainer_type = 'external';
+        $this->trainer_external_name = $training->trainer_external_name;
+        $this->trainer_employee_id = null;
     }
+
+    $this->selected_participants = DB::table('training_participants as tp')
+        ->join('employees as e', 'tp.employee_id', '=', 'e.id')
+        ->leftJoin('organizations as o', 'e.org_id', '=', 'o.id')
+        ->where('tp.training_id', $id)
+        ->select(
+            'e.id',
+            'e.name',
+            'e.nik',
+            DB::raw("IFNULL(o.org_name, 'DEPT TIDAK TERDAFTAR') as org_name")
+        )
+        ->get()
+        ->map(fn($item) => (array)$item)
+        ->toArray();
+}
 
     public function save()
     {

@@ -72,7 +72,8 @@ new class extends Component
                 't.skill_name',
                 't.is_certified',
                 't.trainer_external_name',
-                'tr.name as trainer_internal_name'
+                'tr.name as trainer_internal_name',
+                'tr.nik as trainer_internal_nik'
             )
             ->when($this->search, function ($q) {
                 $q->where(function ($sub) {
@@ -100,44 +101,65 @@ new class extends Component
     }
 
     public function exportExcel()
-    {
-        $fileName = 'Training_Report_' . date('Ymd_His') . '.csv';
-        $data = $this->buildQuery()->get();
+{
+    $fileName = 'Training_Report_' . date('Ymd_His') . '.csv';
+    
+    // Pastikan buildQuery() sudah men-select 'tr.nik as trainer_internal_nik'
+    $data = $this->buildQuery()->get();
 
-        return response()->streamDownload(function () use ($data) {
-            echo "\xEF\xBB\xBF"; 
-            echo "sep=;\n"; 
-            echo "NIK;Nama Karyawan;Departemen;Judul Training;Trainer;Held By;Activities;Skill;Tanggal;Jam Mulai;Jam Selesai;Durasi;Biaya;Score;Sertifikat\n";
+    return response()->streamDownload(function () use ($data) {
+        // Excel BOM untuk support karakter spesial & UTF-8
+        echo "\xEF\xBB\xBF"; 
+        echo "sep=;\n"; 
+        echo "NIK;Nama Karyawan;Departemen;Judul Training;Trainer;Held By;Activities;Skill;Tanggal;Jam Mulai;Jam Selesai;Durasi;Biaya;Score;Sertifikat\n";
 
-            foreach ($data as $row) {
-                $trainer = $row->trainer_internal_name ?: ($row->trainer_external_name ?: '-');
+        foreach ($data as $row) {
+            // 🔥 PERBAIKAN: Logika Trainer agar menampilkan NIK jika Internal
+            $trainer = '-';
+            if ($row->trainer_internal_nik) {
+                // Format: NIK - NAMA (Internal)
+                $trainer = $row->trainer_internal_nik . ' - ' . $row->trainer_internal_name;
+            } elseif ($row->trainer_external_name) {
+                // Format: NAMA (External)
+                $trainer = $row->trainer_external_name;
+            }
+
+            // Penanganan Durasi
+            $duration = 0;
+            if ($row->start_time && $row->finish_time) {
                 $start = \Carbon\Carbon::parse($row->start_time);
                 $end = \Carbon\Carbon::parse($row->finish_time);
                 $duration = round($start->diffInMinutes($end) / 60, 1);
-
-                $line = [
-                    $row->nik,
-                    $row->employee_name,
-                    $row->department,
-                    $row->title,
-                    $trainer,
-                    $row->held_by,
-                    $row->activity_name,
-                    $row->skill_name,
-                    $row->training_date,
-                    $row->start_time,
-                    $row->finish_time,
-                    $duration,
-                    $row->fee,
-                    $row->score ?? 0, 
-                    $row->is_certified
-                ];
-                
-                $cleanLine = array_map(fn($val) => '"' . str_replace('"', '""', $val) . '"', $line);
-                echo implode(';', $cleanLine) . "\n";
             }
-        }, $fileName);
-    }
+
+            $line = [
+                $row->nik,
+                $row->employee_name,
+                $row->department ?? 'N/A',
+                $row->title,
+                $trainer,
+                $row->held_by,
+                $row->activity_name,
+                $row->skill_name,
+                $row->training_date,
+                $row->start_time,
+                $row->finish_time,
+                $duration,
+                $row->fee,
+                $row->score ?? 0, 
+                $row->is_certified
+            ];
+            
+            // Bersihkan data dari karakter yang bisa merusak separator CSV
+            $cleanLine = array_map(function($val) {
+                $val = $val ?? ''; // Handle null
+                return '"' . str_replace('"', '""', $val) . '"';
+            }, $line);
+
+            echo implode(';', $cleanLine) . "\n";
+        }
+    }, $fileName);
+}
 
     public function render()
     {

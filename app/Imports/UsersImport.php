@@ -5,9 +5,10 @@ namespace App\Imports;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
+use Maatwebsite\Excel\Concerns\WithCalculatedFormulas; // Agar VLOOKUP terbaca nilainya
 use Carbon\Carbon;
 
-class UsersImport implements ToModel, WithHeadingRow
+class UsersImport implements ToModel, WithHeadingRow, WithCalculatedFormulas
 {
     public function headingRow(): int
     {
@@ -16,8 +17,12 @@ class UsersImport implements ToModel, WithHeadingRow
 
     public function model(array $row)
     {
-        $judulTraining = $row['training_title'] ?? null;
-        $nikKaryawan   = $row['id'] ?? null;
+        if (!isset($row['training_title']) || empty($row['training_title'])) {
+            return null;
+        }
+
+        $judulTraining = $row['training_title'];
+        $nikKaryawan = isset($row['id']) ? (string) intval($row['id']) : null;
 
         if (!$judulTraining || !$nikKaryawan) {
             return null;
@@ -25,104 +30,87 @@ class UsersImport implements ToModel, WithHeadingRow
 
         $tanggal = $this->transformDate($row['date'] ?? null);
 
-        // 🔥 1. LOGIKA DETEKSI TRAINER (Internal vs External)
+        // 🔥 LOGIKA DETEKSI TRAINER (INTERNAL VS EXTERNAL)
         $trainerNameFromExcel = trim($row['trainer'] ?? '');
-        $trainerInternalName = null;
+        $trainerEmployeeId = null;
         $trainerExternalName = null;
 
         if ($trainerNameFromExcel) {
             // Cek apakah nama ini ada di tabel employees
-            $emp = DB::table('employees')
+            $empTrainer = DB::table('employees')
                 ->where('name', 'like', '%' . $trainerNameFromExcel . '%')
                 ->first();
 
-            if ($emp) {
-                // DISISIPKAN: Gabungkan NIK dan Nama agar cocok dengan Dropdown Layout
-                $trainerInternalName = $emp->nik . ' - ' . $emp->name;
+            if ($empTrainer) {
+                // Jika ketemu, masukkan ke kolom ID (Internal)
+                $trainerEmployeeId = $empTrainer->id;
             } else {
+                // Jika tidak ketemu, masukkan ke nama manual (External)
                 $trainerExternalName = $trainerNameFromExcel;
             }
         }
 
-        // 🔥 2. CARI ATAU BUAT DATA TRAINING
+        // 3. PROSES DATA TRAINING
         $training = DB::table('trainings')
             ->where('title', $judulTraining)
             ->where('training_date', $tanggal)
             ->first();
 
+        $dataTraining = [
+            'title'                 => $judulTraining,
+            'held_by'               => $row['held_by'] ?? 'JEMBO',
+            'activity_name'         => $row['activity'] ?? 'External',
+            'skill_name'            => $row['skill'] ?? 'Soft Skill',
+            'training_date'         => $tanggal,
+            'start_time'            => $this->parseTime($row['time'] ?? null, 'start'),
+            'finish_time'           => $this->parseTime($row['time'] ?? null, 'end'),
+            'fee'                   => $row['fee'] ?? 0,
+            'is_certified'          => 'No',
+            'trainer_employee_id'   => $trainerEmployeeId, // Masuk ke ID Employee
+            'trainer_external_name' => $trainerExternalName, // Masuk ke Nama Manual
+            'updated_at'            => now(),
+        ];
+
         if (!$training) {
-            $trainingId = DB::table('trainings')->insertGetId([
-                'title'                 => $judulTraining,
-                'trainer_internal_name' => $trainerInternalName,
-                'trainer_external_name' => $trainerExternalName,
-                'held_by'               => $row['held_by'] ?? 'JEMBO',
-                'activity_name'         => $row['activity'] ?? 'Internal',
-                'skill_name'            => $row['skill'] ?? 'Hard Skill',
-                'training_date'         => $tanggal,
-                'start_time'            => $this->parseTime($row['time'] ?? null, 'start'),
-                'finish_time'           => $this->parseTime($row['time'] ?? null, 'end'),
-                'fee'                   => $row['fee'] ?? 0,
-                'is_certified'          => 'No',
-                'created_at'            => now(),
-                'updated_at'            => now(),
-            ]);
+            $dataTraining['created_at'] = now();
+            $trainingId = DB::table('trainings')->insertGetId($dataTraining);
         } else {
-            // Jika training sudah ada, kita update saja nama trainernya
-            DB::table('trainings')->where('id', $training->id)->update([
-                'trainer_internal_name' => $trainerInternalName,
-                'trainer_external_name' => $trainerExternalName,
-                'updated_at'            => now(),
-            ]);
+            DB::table('trainings')->where('id', $training->id)->update($dataTraining);
             $trainingId = $training->id;
         }
 
-        // 🔥 3. Cari employee berdasarkan ID (NIK) untuk Peserta
-        $employee = DB::table('employees')
-            ->where('nik', trim($nikKaryawan))
-            ->first();
+        // 4. CARI PESERTA
+        $employee = DB::table('employees')->where('nik', $nikKaryawan)->first();
 
-        // 🔥 4. Jika karyawan ditemukan, masukkan sebagai peserta
-         if ($employee) {
+        if ($employee) {
             DB::table('training_participants')->updateOrInsert(
-                [
-                    'training_id' => $trainingId,
-                    'employee_id' => $employee->id,
-                    'score'      => $row['evaluation'] ?? null,
-                    'updated_at' => now(),
-                ]
+                ['training_id' => $trainingId, 'employee_id' => $employee->id],
+                ['score' => $row['evaluation'] ?? null, 'updated_at' => now()]
             );
         }
 
         return null;
     }
-        
+
     private function parseTime($value, $type)
     {
         if (!$value) return null;
-
+        $value = str_replace('.', ':', $value);
         if (str_contains($value, '-')) {
             $parts = explode('-', $value);
-            $time = $type == 'start'
-                ? ($parts[0] ?? null)
-                : ($parts[1] ?? null);
-
-            return $time ? str_replace('.', ':', trim($time)) : null;
+            $time = ($type == 'start') ? ($parts[0] ?? null) : ($parts[1] ?? null);
+            return $time ? trim($time) : null;
         }
-
-        return str_replace('.', ':', $value);
+        return $value;
     }
 
     private function transformDate($value)
     {
         try {
             if (!$value) return now()->format('Y-m-d');
-
             if (is_numeric($value)) {
-                return \PhpOffice\PhpSpreadsheet\Shared\Date
-                    ::excelToDateTimeObject($value)
-                    ->format('Y-m-d');
+                return \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($value)->format('Y-m-d');
             }
-
             return Carbon::parse($value)->format('Y-m-d');
         } catch (\Exception $e) {
             return now()->format('Y-m-d');

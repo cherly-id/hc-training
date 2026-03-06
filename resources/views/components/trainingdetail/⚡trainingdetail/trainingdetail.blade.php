@@ -31,25 +31,24 @@
 
         {{-- FILTER PANEL --}}
         <div class="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm">
-            {{-- Menggunakan grid-cols-5 agar semua elemen sejajar horizontal --}}
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
-                
+
                 {{-- 1. Nama / NIK --}}
                 <div class="space-y-1.5">
                     <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Nama / NIK</label>
                     <input type="text" wire:model.live.debounce.300ms="search" placeholder="Cari..."
-                        class="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-[10px] font-bold uppercase outline-none focus:ring-4 focus:ring-blue-50 shadow-inner text-slate-600 placeholder:text-slate-300">
+                        class="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-[10px] font-bold uppercase outline-none focus:ring-4 focus:ring-blue-50 shadow-inner text-slate-900 placeholder:text-slate-400">
                 </div>
 
                 {{-- 2. Judul Training --}}
                 <div class="space-y-1.5">
                     <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Judul Training</label>
                     <select wire:model.live="title_filter"
-                        class="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-[10px] font-bold uppercase outline-none focus:ring-4 focus:ring-blue-50 shadow-inner appearance-none transition-all
-                        {{ !$title_filter ? 'text-slate-300' : 'text-slate-600' }}">
-                        <option value="" class="text-slate-300">SEMUA JUDUL</option>
+                        class="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-[10px] font-bold uppercase outline-none focus:ring-4 focus:ring-blue-50 shadow-inner appearance-none transition-all text-slate-900">
+                       
+                        <option value="" class="text-slate-900 font-bold">SEMUA JUDUL</option>
                         @foreach($allTitles as $t)
-                        <option value="{{ $t->title }}" class="text-slate-600">{{ $t->title }}</option>
+                        <option value="{{ $t->title }}" class="text-slate-900">{{ $t->title }}</option>
                         @endforeach
                     </select>
                 </div>
