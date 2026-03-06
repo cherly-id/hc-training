@@ -42,7 +42,7 @@ new class extends Component
             fputcsv($file, ['REPORT DETAIL PENETRASI TRAINING']);
             fputcsv($file, ['Tanggal Filter:', ($this->dateFrom ?: '-') . ' s/d ' . ($this->dateTo ?: '-')]);
             fputcsv($file, []);
-            fputcsv($file, ['Department', 'Nama Karyawan', 'ID Karyawan', 'Status Training', 'Judul Training']);
+            fputcsv($file, ['Department', 'Nama Karyawan', 'NIK', 'Status Training', 'Judul Training']);
 
             $orgs = DB::table('organizations')
                 ->when($this->search, function ($query) {
