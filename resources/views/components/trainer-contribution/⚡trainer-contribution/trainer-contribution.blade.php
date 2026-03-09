@@ -19,41 +19,58 @@
             </div>
         </div>
 
-        {{-- FILTER PANEL --}}
-        <div class="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+        {{-- FILTER PANEL (DIPERSINGKAT & SEJAJAR) --}}
+<div class="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm">
+    {{-- lg:grid-cols-5 memastikan semua input sejajar sebaris di layar komputer --}}
+    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end">
 
-                {{-- Cari Trainer (Sekarang Jadi Dropdown) --}}
-                <div class="space-y-2">
-                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Pilih Trainer</label>
-                    <select wire:model.live="search"
-                        class="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-[11px] font-bold uppercase outline-none focus:ring-4 focus:ring-blue-50 shadow-inner appearance-none transition-all text-slate-900">
-
-                        <option value="" class="text-slate-900 font-bold">--SEMUA TRAINER--</option>
-                        @foreach($trainerList as $t)
-                        <option value="{{ $t->name }}" class="text-slate-900">{{ $t->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div class="space-y-2">
-                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dari Tanggal</label>
-                    <input type="date" wire:model.live="date_from"
-                        class="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-[11px] font-bold outline-none focus:ring-4 focus:ring-blue-50 shadow-inner text-slate-600">
-                </div>
-
-                <div class="space-y-2">
-                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Sampai Tanggal</label>
-                    <input type="date" wire:model.live="date_to"
-                        class="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-[11px] font-bold outline-none focus:ring-4 focus:ring-blue-50 shadow-inner text-slate-600">
-                </div>
-
-                <button wire:click="resetFilters"
-                    class="px-8 py-4 bg-blue-100 hover:bg-slate-200 text-black-400 font-black rounded-2xl text-[10px] uppercase tracking-widest transition-all">
-                    Reset Filter
-                </button>
-            </div>
+        {{-- 1. Pilih Trainer --}}
+        <div class="space-y-2">
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Pilih Trainer</label>
+            <select wire:model.live="search"
+                class="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-[11px] font-bold uppercase outline-none focus:ring-4 focus:ring-blue-50 shadow-inner appearance-none transition-all text-slate-900 cursor-pointer">
+                <option value="" class="text-slate-900 font-bold">-- SEMUA TRAINER --</option>
+                @foreach($trainerList as $t)
+                    <option value="{{ $t->name }}" class="text-slate-900">{{ $t->name }}</option>
+                @endforeach
+            </select>
         </div>
+
+        {{-- 2. Pilih Jabatan --}}
+        <div class="space-y-2">
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Jabatan</label>
+            <select wire:model.live="position_filter" 
+                class="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-[11px] font-bold uppercase outline-none focus:ring-4 focus:ring-blue-50 shadow-inner appearance-none transition-all text-slate-900 cursor-pointer">
+                <option value="">-- SEMUA JABATAN --</option>
+                @foreach($positionList as $p)
+                    <option value="{{ $p->position_name }}">{{ $p->position_name }}</option>
+                @endforeach
+            </select>
+        </div>
+
+        {{-- 3. Mulai --}}
+        <div class="space-y-2">
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Mulai</label>
+            <input type="date" wire:model.live="date_from"
+                class="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-[11px] font-bold outline-none focus:ring-4 focus:ring-blue-50 shadow-inner text-slate-600">
+        </div>
+
+        {{-- 4. Sampai --}}
+        <div class="space-y-2">
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Sampai</label>
+            <input type="date" wire:model.live="date_to"
+                class="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-[11px] font-bold outline-none focus:ring-4 focus:ring-blue-50 shadow-inner text-slate-600">
+        </div>
+
+        {{-- 5. Tombol Reset --}}
+        <div>
+            <button wire:click="resetFilters"
+                class="w-full py-4 bg-blue-100 hover:bg-slate-200 text-black-400 font-black rounded-2xl text-[10px] uppercase tracking-widest transition-all active:scale-95 border border-slate-200/50 shadow-sm">
+                RESET FILTER
+            </button>
+        </div>
+    </div>
+</div>
 
         {{-- TABLE SECTION --}}
         <div class="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
@@ -63,6 +80,7 @@
                         <tr>
                             <th class="px-8 py-5 text-[10px] font-black text-white uppercase tracking-widest border-none text-center w-16">No</th>
                             <th class="px-8 py-5 text-[10px] font-black text-white uppercase tracking-widest border-none">Nama Trainer</th>
+                            <th class="px-8 py-5 text-[10px] font-black text-white uppercase tracking-widest border-none">Jabatan</th>
                             <th class="px-8 py-5 text-[10px] font-black text-white uppercase tracking-widest border-none">Organization</th>
                             <th class="px-8 py-5 text-[10px] font-black text-white uppercase tracking-widest border-none">Activities</th>
                             <th class="px-8 py-5 text-[10px] font-black text-white uppercase tracking-widest border-none">Skill</th>
@@ -77,6 +95,9 @@
                             </td>
                             <td class="px-8 py-5 font-bold text-slate-700 uppercase text-xs tracking-tight">
                                 {{ $item->trainer_name ?: 'TANPA NAMA' }}
+                            </td>
+                            <td class="px-8 py-5 font-bold text-blue-500 uppercase text-[10px] tracking-tight">
+                                {{ $item->position ?: '-' }}
                             </td>
                             <td class="px-8 py-5 font-bold text-slate-400 uppercase text-[11px] tracking-tight">
                                 {{ $item->organization }}
@@ -184,7 +205,17 @@
         </div>
 
         {{-- Footer Modal --}}
-        <div class="p-6 bg-slate-50/50">
+        <div class="p-6 bg-slate-50/50 space-y-3">
+            {{-- 🔥 Tombol Export Excel Detail --}}
+            <button wire:click="exportDetailExcel" wire:loading.attr="disabled"
+                class="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-emerald-100 active:scale-95 flex items-center justify-center gap-2">
+                <span wire:loading wire:target="exportDetailExcel" class="animate-spin text-xs">🌀</span>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-4 h-4">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M7.5 12 12 16.5m0 0L16.5 12M12 16.5V3" />
+                </svg>
+                EXPORT EXCEL (DETAILED)
+            </button>
+
             <button wire:click="$set('showDetailModal', false)"
                 class="w-full py-4 bg-white border border-slate-200 text-slate-400 font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-slate-100 transition-all shadow-sm active:scale-95">
                 CLOSE

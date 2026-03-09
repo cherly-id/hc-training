@@ -26,10 +26,8 @@ return new class extends Component
     // =========================================
     public function buildData()
 {
-    // 1. Ambil semua organisasi (ID & Nama)
     $orgs = DB::table('organizations')->orderBy('org_name', 'ASC')->get();
 
-    // 2. Hitung total karyawan (Kecuali Harian Lepas)
     $emp_counts = DB::table('employees')
         ->select('org_id', DB::raw('count(*) as total'))
         ->where('status', 'Active') 
@@ -38,7 +36,6 @@ return new class extends Component
         ->pluck('total', 'org_id')
         ->all();
 
-    // 3. Hitung durasi training (Kecuali Harian Lepas)
     $raw_hours = DB::table('training_participants as tp')
         ->join('trainings as t', 'tp.training_id', '=', 't.id')
         ->join('employees as e', 'tp.employee_id', '=', 'e.id')
@@ -47,16 +44,36 @@ return new class extends Component
             DB::raw('MONTH(t.training_date) as bln'),
             DB::raw('SUM(TIMESTAMPDIFF(MINUTE, t.start_time, t.finish_time)) as total_minutes')
         )
-        ->where('e.status', 'Active') // Pastikan hanya yang aktif
+        ->where('e.status', 'Active')
         ->where('e.status_employee', '!=', 'Harian Lepas')
         ->whereYear('t.training_date', $this->year)
         ->groupBy('e.org_id', 'bln')
         ->get();
 
-    // 4. Mapping data ke matrix [ID_ORG][BULAN]
-    $matrix = [];
+    // Mapping awal: [ORG_ID][BULAN] = Menit Bulanan
+    $monthly_minutes = [];
     foreach ($raw_hours as $row) {
-        $matrix[$row->org_id][$row->bln] = $row->total_minutes;
+        $monthly_minutes[$row->org_id][$row->bln] = $row->total_minutes;
+    }
+
+    // 🔥 LOGIC AKUMULASI (YTD)
+    $matrix = [];
+    $currentMonth = ($this->year == date('Y')) ? date('n') : 12; // Jika tahun ini, stop di bulan sekarang. Jika tahun lalu, munculkan semua (12).
+
+    foreach ($orgs as $org) {
+        $runningSum = 0;
+        for ($bln = 1; $bln <= 12; $bln++) {
+            // Jika bulan yang di-loop melebihi bulan sekarang, jangan isi datanya
+            if ($bln > $currentMonth) {
+                $matrix[$org->id][$bln] = null; 
+                continue;
+            }
+
+            $currentMonthMinutes = $monthly_minutes[$org->id][$bln] ?? 0;
+            $runningSum += $currentMonthMinutes;
+            
+            $matrix[$org->id][$bln] = $runningSum;
+        }
     }
 
     return [
@@ -64,6 +81,50 @@ return new class extends Component
         'emp_counts' => $emp_counts,
         'matrix' => $matrix
     ];
+}
+
+
+public function exportExcel()
+{
+    $fileName = 'Average_Training_Hours_' . $this->year . '.csv';
+    $data = $this->buildData();
+
+    return response()->streamDownload(function () use ($data) {
+        // Excel BOM agar karakter spesial terbaca dengan benar
+        echo "\xEF\xBB\xBF"; 
+        echo "sep=;\n"; 
+        
+        // Header Tabel
+        echo "Department;Total Employees;Jan;Feb;Mar;Apr;Mei;Jun;Jul;Agu;Sep;Okt;Nov;Des\n";
+
+        foreach ($data['orgs'] as $org) {
+            $empCount = $data['emp_counts'][$org->id] ?? 0;
+            
+            // Kolom Dasar: Nama Departemen dan Jumlah Karyawan
+            $line = [
+                $org->org_name,
+                $empCount
+            ];
+
+            // Isi data bulan 1 sampai 12 sesuai logic Average Training
+            for ($bln = 1; $bln <= 12; $bln++) {
+                $totalMinutes = $data['matrix'][$org->id][$bln] ?? 0;
+                
+                // Logic Perhitungan Aktual: (Total Menit / 60) / Total Karyawan
+                $avgHours = ($empCount > 0) ? ($totalMinutes / 60) / $empCount : 0;
+                
+                // Masukkan hasil ke array dengan format 2 angka di belakang koma
+                $line[] = number_format($avgHours, 2, ',', '');
+            }
+
+            // Bersihkan data dari karakter yang bisa merusak separator
+            $cleanLine = array_map(function($val) {
+                return '"' . str_replace('"', '""', $val) . '"';
+            }, $line);
+
+            echo implode(';', $cleanLine) . "\n";
+        }
+    }, $fileName);
 }
 
     // =========================================

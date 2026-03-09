@@ -12,6 +12,7 @@ return new class extends Component
     protected $paginationTheme = 'tailwind';
 
     public $search = '';
+    public $position_filter = '';
     public $date_from;
     public $date_to;
     public $showDetailModal = false;
@@ -26,6 +27,7 @@ return new class extends Component
     public function resetFilters()
     {
         $this->search = '';
+        $this->position_filter = '';
         $this->date_from = null;
         $this->date_to = null;
         $this->resetPage();
@@ -69,8 +71,10 @@ return new class extends Component
         $query = DB::table('trainings as t')
             ->leftJoin('employees as tr', 't.trainer_employee_id', '=', 'tr.id')
             ->leftJoin('organizations as o', 'tr.org_id', '=', 'o.id')
+            ->leftJoin('positions as p', 'tr.position_id', '=', 'p.id')
             ->select(
                 DB::raw('COALESCE(tr.name, t.trainer_external_name) as trainer_name'),
+                DB::raw('COALESCE(p.position_name, "-") as position'),
                 DB::raw('COALESCE(o.org_name, "-") as organization'),
                 DB::raw("GROUP_CONCAT(DISTINCT t.activity_name SEPARATOR ', ') as activity_name"),
                 DB::raw("GROUP_CONCAT(DISTINCT t.skill_name SEPARATOR ', ') as skill_name"),
@@ -79,22 +83,27 @@ return new class extends Component
 
         if (!empty($this->search)) {
             $query->where(function ($q) {
-                
+
                 $q->where('tr.name', 'like', '%' . $this->search . '%')
                     ->orWhere('t.trainer_external_name', 'like', '%' . $this->search . '%')
                     ->orWhere('o.org_name', 'like', '%' . $this->search . '%');
             });
         }
 
+        if (!empty($this->position_filter)) {
+            $query->where('p.position_name', $this->position_filter);
+        }
+
         if (!empty($this->date_from) && !empty($this->date_to)) {
             $query->whereBetween('t.training_date', [$this->date_from, $this->date_to]);
         }
 
-     
+
         $query->groupBy(
             'tr.name',
             't.trainer_external_name',
-            'o.org_name'
+            'o.org_name',
+            'p.position_name'
         )
             ->orderByDesc('total_minutes');
 
@@ -105,10 +114,16 @@ return new class extends Component
     {
         return response()->streamDownload(function () {
             $data = $this->getBaseQuery()->get();
-            echo "Nama Trainer\tOrganization\tActivity\tSkill\tDurasi Jam Mengajar\n";
+
+            // Header Excel: Nama, Jabatan, Org, Activity, Skill, Total Jam
+            echo "Nama Trainer\tPosition\tOrganization\tActivity\tSkill\tTotal Jam Mengajar\n";
+
             foreach ($data as $row) {
                 $hours = round(($row->total_minutes ?? 0) / 60, 2);
+
+                // Format output menggunakan Tab (\t) agar rapi di Excel
                 echo ($row->trainer_name ?? 'Tanpa Nama') . "\t" .
+                    ($row->position ?? '-') . "\t" .
                     ($row->organization ?? '-') . "\t" .
                     ($row->activity_name ?? '-') . "\t" .
                     ($row->skill_name ?? '-') . "\t" .
@@ -117,8 +132,38 @@ return new class extends Component
         }, 'Trainer_Contribution_Report_' . date('Ymd') . '.xls');
     }
 
+    public function exportDetailExcel()
+    {
+        // 1. Validasi awal
+        if (!$this->selectedTrainerName) return;
+
+        $fileName = 'Detail_Mengajar_' . str_replace(' ', '_', $this->selectedTrainerName) . '_' . date('Ymd') . '.xls';
+
+        // 2. Ambil data dari properti yang sudah diisi oleh fungsi showDetail
+        $data = $this->trainerDetails;
+
+        return response()->streamDownload(function () use ($data) {
+            // Excel BOM & Header
+            echo "Topik Pelatihan\tTanggal\tJam Mulai\tJam Selesai\tDurasi (Jam)\n";
+
+            foreach ($data as $row) {
+                // Kita gunakan logic pembagian 60 karena minutes disimpan dalam satuan menit
+                $durationHours = round(($row->minutes ?? 0) / 60, 2);
+
+                echo ($row->title ?? '-') . "\t" .
+                    ($row->training_date ?? '-') . "\t" .
+                    ($row->start_time ?? '-') . "\t" .
+                    ($row->finish_time ?? '-') . "\t" .
+                    str_replace('.', ',', $durationHours) . " Jam\n";
+            }
+        }, $fileName);
+    }
+
     public function render()
     {
+        $positionList = DB::table('positions')
+        ->orderBy('position_name', 'asc')
+        ->get();
         $trainerList = DB::table('trainings as t')
             ->leftJoin('employees as tr', 't.trainer_employee_id', '=', 'tr.id')
             ->select(DB::raw('COALESCE(tr.name, t.trainer_external_name) as name'))
@@ -129,7 +174,8 @@ return new class extends Component
 
         return view('components.trainer-contribution.⚡trainer-contribution.trainer-contribution', [
             'contributions' => $this->getBaseQuery()->paginate(10),
-            'trainerList' => $trainerList
+            'trainerList' => $trainerList,
+            'positionList' => $positionList
         ]);
     }
 };
