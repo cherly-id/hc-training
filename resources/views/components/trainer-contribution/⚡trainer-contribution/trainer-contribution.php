@@ -12,7 +12,7 @@ return new class extends Component
     protected $paginationTheme = 'tailwind';
 
     public $search = '';
-    public $position_filter = '';
+    public $position_filter = [];
     public $date_from;
     public $date_to;
     public $showDetailModal = false;
@@ -24,10 +24,15 @@ return new class extends Component
         $this->resetPage();
     }
 
+    public function selectAllPositions()
+    {
+        $this->position_filter = DB::table('positions')->pluck('position_name')->toArray();
+    }
+
     public function resetFilters()
     {
         $this->search = '';
-        $this->position_filter = '';
+        $this->position_filter = [];
         $this->date_from = null;
         $this->date_to = null;
         $this->resetPage();
@@ -66,49 +71,64 @@ return new class extends Component
         $this->showDetailModal = true;
     }
 
+    private function getTrainerList()
+{
+    return DB::table('trainings as t')
+        ->leftJoin('employees as tr', 't.trainer_employee_id', '=', 'tr.id')
+        ->select(DB::raw('COALESCE(tr.name, t.trainer_external_name) as name'))
+        ->distinct()
+        ->whereNotNull(DB::raw('COALESCE(tr.name, t.trainer_external_name)'))
+        ->orderBy('name', 'asc')
+        ->get();
+}
+
     private function getBaseQuery()
-    {
-        $query = DB::table('trainings as t')
+{
+    // Mode Monitoring: Jika Jabatan dipilih (Manager/Supervisor)
+    if (!empty($this->position_filter)) {
+        return DB::table('employees as e')
+            ->leftJoin('positions as p', 'e.position_id', '=', 'p.id')
+            ->leftJoin('organizations as o', 'e.org_id', '=', 'o.id')
+            ->leftJoin('trainings as t', 'e.id', '=', 't.trainer_employee_id')
+            ->select(
+                'e.name as trainer_name',
+                'e.nik',
+                DB::raw('COALESCE(p.position_name, "-") as position'),
+                DB::raw('COALESCE(o.org_name, "-") as organization'),
+                DB::raw("COALESCE(GROUP_CONCAT(DISTINCT t.activity_name SEPARATOR ', '), '-') as activity_name"),
+                DB::raw("COALESCE(GROUP_CONCAT(DISTINCT t.skill_name SEPARATOR ', '), '-') as skill_name"), // Kolom ini sudah ada
+                DB::raw('SUM(COALESCE(TIMESTAMPDIFF(MINUTE, t.start_time, t.finish_time), 0)) as total_minutes')
+            )
+            ->whereIn('p.position_name', (array)$this->position_filter)
+            ->when($this->search, fn($q) => $q->where('e.name', 'like', '%' . $this->search . '%'))
+            ->when($this->date_from, fn($q) => $q->where(fn($sub) => $sub->whereDate('t.training_date', '>=', $this->date_from)->orWhereNull('t.training_date')))
+            ->when($this->date_to, fn($q) => $q->where(fn($sub) => $sub->whereDate('t.training_date', '<=', $this->date_to)->orWhereNull('t.training_date')))
+            ->groupBy('e.id', 'e.name', 'e.nik', 'p.position_name', 'o.org_name')
+            ->orderByDesc('total_minutes');
+            
+    } else {
+        // Mode Default: Tampilkan semua yang pernah mengajar (Internal + External)
+        return DB::table('trainings as t')
             ->leftJoin('employees as tr', 't.trainer_employee_id', '=', 'tr.id')
             ->leftJoin('organizations as o', 'tr.org_id', '=', 'o.id')
             ->leftJoin('positions as p', 'tr.position_id', '=', 'p.id')
             ->select(
                 DB::raw('COALESCE(tr.name, t.trainer_external_name) as trainer_name'),
-                DB::raw('COALESCE(p.position_name, "-") as position'),
+                'tr.nik',
+                DB::raw('COALESCE(p.position_name, "EXTERNAL") as position'),
                 DB::raw('COALESCE(o.org_name, "-") as organization'),
-                DB::raw("GROUP_CONCAT(DISTINCT t.activity_name SEPARATOR ', ') as activity_name"),
-                DB::raw("GROUP_CONCAT(DISTINCT t.skill_name SEPARATOR ', ') as skill_name"),
+                DB::raw("COALESCE(GROUP_CONCAT(DISTINCT t.activity_name SEPARATOR ', '), '-') as activity_name"),
+                DB::raw("COALESCE(GROUP_CONCAT(DISTINCT t.skill_name SEPARATOR ', '), '-') as skill_name"), // TAMBAHKAN BARIS INI
                 DB::raw('SUM(TIMESTAMPDIFF(MINUTE, t.start_time, t.finish_time)) as total_minutes')
-            );
-
-        if (!empty($this->search)) {
-            $query->where(function ($q) {
-
+            )
+            ->when($this->search, function ($q) {
                 $q->where('tr.name', 'like', '%' . $this->search . '%')
-                    ->orWhere('t.trainer_external_name', 'like', '%' . $this->search . '%')
-                    ->orWhere('o.org_name', 'like', '%' . $this->search . '%');
-            });
-        }
-
-        if (!empty($this->position_filter)) {
-            $query->where('p.position_name', $this->position_filter);
-        }
-
-        if (!empty($this->date_from) && !empty($this->date_to)) {
-            $query->whereBetween('t.training_date', [$this->date_from, $this->date_to]);
-        }
-
-
-        $query->groupBy(
-            'tr.name',
-            't.trainer_external_name',
-            'o.org_name',
-            'p.position_name'
-        )
+                  ->orWhere('t.trainer_external_name', 'like', '%' . $this->search . '%');
+            })
+            ->groupBy('tr.name', 'tr.nik', 't.trainer_external_name', 'o.org_name', 'p.position_name')
             ->orderByDesc('total_minutes');
-
-        return $query;
     }
+}
 
     public function exportExcel()
     {
@@ -162,8 +182,8 @@ return new class extends Component
     public function render()
     {
         $positionList = DB::table('positions')
-        ->orderBy('position_name', 'asc')
-        ->get();
+            ->orderBy('position_name', 'asc')
+            ->get();
         $trainerList = DB::table('trainings as t')
             ->leftJoin('employees as tr', 't.trainer_employee_id', '=', 'tr.id')
             ->select(DB::raw('COALESCE(tr.name, t.trainer_external_name) as name'))
@@ -174,8 +194,8 @@ return new class extends Component
 
         return view('components.trainer-contribution.⚡trainer-contribution.trainer-contribution', [
             'contributions' => $this->getBaseQuery()->paginate(10),
-            'trainerList' => $trainerList,
-            'positionList' => $positionList
+            'trainerList' => $this->getTrainerList(),
+            'positionList' => DB::table('positions')->orderBy('position_name', 'asc')->get()
         ]);
     }
 };

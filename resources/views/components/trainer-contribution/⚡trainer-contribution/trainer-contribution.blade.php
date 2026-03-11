@@ -20,57 +20,108 @@
         </div>
 
         {{-- FILTER PANEL (DIPERSINGKAT & SEJAJAR) --}}
-<div class="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm">
-    {{-- lg:grid-cols-5 memastikan semua input sejajar sebaris di layar komputer --}}
-    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end">
+        <div class="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm">
+            {{-- lg:grid-cols-5 memastikan semua input sejajar sebaris di layar komputer --}}
+            <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end">
 
-        {{-- 1. Pilih Trainer --}}
-        <div class="space-y-2">
-            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Pilih Trainer</label>
-            <select wire:model.live="search"
-                class="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-[11px] font-bold uppercase outline-none focus:ring-4 focus:ring-blue-50 shadow-inner appearance-none transition-all text-slate-900 cursor-pointer">
-                <option value="" class="text-slate-900 font-bold">-- SEMUA TRAINER --</option>
-                @foreach($trainerList as $t)
-                    <option value="{{ $t->name }}" class="text-slate-900">{{ $t->name }}</option>
-                @endforeach
-            </select>
-        </div>
+                {{-- 1. Pilih Trainer --}}
+                <div class="space-y-2">
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Pilih Trainer</label>
+                    <select wire:model.live="search"
+                        class="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-[11px] font-bold uppercase outline-none focus:ring-4 focus:ring-blue-50 shadow-inner appearance-none transition-all text-slate-900 cursor-pointer">
+                        <option value="" class="text-slate-900 font-bold">-- SEMUA TRAINER --</option>
+                        @foreach($trainerList as $t)
+                        <option value="{{ $t->name }}" class="text-slate-900">{{ $t->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
 
-        {{-- 2. Pilih Jabatan --}}
-        <div class="space-y-2">
-            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Jabatan</label>
-            <select wire:model.live="position_filter" 
-                class="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-[11px] font-bold uppercase outline-none focus:ring-4 focus:ring-blue-50 shadow-inner appearance-none transition-all text-slate-900 cursor-pointer">
-                <option value="">-- SEMUA JABATAN --</option>
-                @foreach($positionList as $p)
-                    <option value="{{ $p->position_name }}">{{ $p->position_name }}</option>
-                @endforeach
-            </select>
-        </div>
+                {{-- 2. Pilih Jabatan (Excel Style Dropdown dengan Search & Select All) --}}
+                <div class="space-y-2 relative" x-data="{ open: false, searchTerm: '' }">
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Jabatan</label>
 
-        {{-- 3. Mulai --}}
-        <div class="space-y-2">
-            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Mulai</label>
-            <input type="date" wire:model.live="date_from"
-                class="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-[11px] font-bold outline-none focus:ring-4 focus:ring-blue-50 shadow-inner text-slate-600">
-        </div>
+                    {{-- Tombol Pemicu (Trigger) --}}
+                    <button @click="open = !open" @click.away="open = false" type="button"
+                        class="w-full flex justify-between items-center px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-[11px] font-bold uppercase outline-none focus:ring-4 focus:ring-blue-50 shadow-inner transition-all text-slate-900 cursor-pointer">
+                        <span class="truncate pr-2">
+                            @if(count((array)$position_filter) == 0)
+                            -- SEMUA JABATAN --
+                            @else
+                            {{ count((array)$position_filter) }} JABATAN TERPILIH
+                            @endif
+                        </span>
+                        <svg xmlns="http://www.w3.org/2000/svg" :class="open ? 'rotate-180' : ''" class="h-4 w-4 transition-transform duration-200 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
 
-        {{-- 4. Sampai --}}
-        <div class="space-y-2">
-            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Sampai</label>
-            <input type="date" wire:model.live="date_to"
-                class="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-[11px] font-bold outline-none focus:ring-4 focus:ring-blue-50 shadow-inner text-slate-600">
-        </div>
+                    {{-- Dropdown Menu --}}
+                    <div x-show="open"
+                        x-transition:enter="transition ease-out duration-100"
+                        x-transition:enter-start="opacity-0 scale-95"
+                        x-transition:enter-end="opacity-100 scale-100"
+                        class="absolute z-[100] mt-2 w-full bg-white rounded-[1.5rem] shadow-2xl border border-slate-100 p-4 space-y-3">
 
-        {{-- 5. Tombol Reset --}}
-        <div>
-            <button wire:click="resetFilters"
-                class="w-full py-4 bg-blue-100 hover:bg-slate-200 text-black-400 font-black rounded-2xl text-[10px] uppercase tracking-widest transition-all active:scale-95 border border-slate-200/50 shadow-sm">
-                RESET FILTER
-            </button>
+                        {{-- Input Search ala Excel --}}
+                        <div class="relative">
+                            <input type="text" x-model="searchTerm" placeholder="Cari jabatan..."
+                                class="w-full px-4 py-2 bg-slate-50 border-none rounded-xl text-[10px] font-bold uppercase outline-none focus:ring-2 focus:ring-blue-100 shadow-inner">
+                        </div>
+
+                        {{-- Opsi Select All --}}
+                        <div class="flex items-center justify-between px-2 pb-1 border-b border-slate-50">
+                            <button type="button" wire:click="selectAllPositions" class="text-[9px] font-black text-blue-600 uppercase hover:underline">Select All</button>
+                            <button type="button" wire:click="$set('position_filter', [])" class="text-[9px] font-black text-red-400 uppercase hover:underline">Clear</button>
+                        </div>
+
+                        {{-- Daftar Checkbox dengan Filter Search (Alpine.js) --}}
+                        <div class="max-h-60 overflow-y-auto custom-scrollbar-mini pr-2">
+                            @foreach($positionList as $p)
+                            <label x-show="searchTerm === '' || '{{ strtoupper($p->position_name) }}'.includes(searchTerm.toUpperCase())"
+                                class="flex items-center p-2 rounded-xl hover:bg-blue-50 cursor-pointer group transition-colors">
+                                <input type="checkbox"
+                                    wire:model.live="position_filter"
+                                    value="{{ $p->position_name }}"
+                                    class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                                <span class="ml-3 text-[11px] font-bold uppercase text-slate-600 group-hover:text-blue-700">
+                                    {{ $p->position_name }}
+                                </span>
+                            </label>
+                            @endforeach
+                        </div>
+
+                        {{-- Tombol Selesai --}}
+                        <div class="pt-2 border-t border-slate-50">
+                            <button @click="open = false" type="button" class="w-full py-2 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-600 transition-colors">
+                                Terapkan Filter
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- 3. Mulai --}}
+                <div class="space-y-2">
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Mulai</label>
+                    <input type="date" wire:model.live="date_from"
+                        class="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-[11px] font-bold outline-none focus:ring-4 focus:ring-blue-50 shadow-inner text-slate-600">
+                </div>
+
+                {{-- 4. Sampai --}}
+                <div class="space-y-2">
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Sampai</label>
+                    <input type="date" wire:model.live="date_to"
+                        class="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-[11px] font-bold outline-none focus:ring-4 focus:ring-blue-50 shadow-inner text-slate-600">
+                </div>
+
+                {{-- 5. Tombol Reset --}}
+                <div>
+                    <button wire:click="resetFilters"
+                        class="w-full py-4 bg-blue-100 hover:bg-slate-200 text-black-400 font-black rounded-2xl text-[10px] uppercase tracking-widest transition-all active:scale-95 border border-slate-200/50 shadow-sm">
+                        RESET FILTER
+                    </button>
+                </div>
+            </div>
         </div>
-    </div>
-</div>
 
         {{-- TABLE SECTION --}}
         <div class="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
