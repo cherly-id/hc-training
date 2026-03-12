@@ -26,6 +26,7 @@ new class extends Component {
 
     public $trainer_type = 'internal';
     public $trainer_employee_id = null;
+    public $selected_trainers = [];
     public $trainer_external_name = '';
     public $showFormModal = false;
 

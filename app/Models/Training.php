@@ -22,9 +22,15 @@ class Training extends Model
                     ->withPivot('score');
     }
 
-    public function schedules()
+    public function trainers()
     {
-        // 2. Use PascalCase for the class name
-        return $this->hasMany(training_schedules::class, 'training_id', 'id');
+        return $this->belongsToMany(Employee::class, 'trainer_training', 'training_id', 'employee_id')
+                    ->withTimestamps();
     }
+
+    // public function schedules()
+    // {
+    //     // 2. Use PascalCase for the class name
+    //     return $this->hasMany(training_schedules::class, 'training_id', 'id');
+    // }
 }

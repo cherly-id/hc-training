@@ -104,7 +104,8 @@ return new class extends Component
             ->when($this->date_from, fn($q) => $q->where(fn($sub) => $sub->whereDate('t.training_date', '>=', $this->date_from)->orWhereNull('t.training_date')))
             ->when($this->date_to, fn($q) => $q->where(fn($sub) => $sub->whereDate('t.training_date', '<=', $this->date_to)->orWhereNull('t.training_date')))
             ->groupBy('e.id', 'e.name', 'e.nik', 'p.position_name', 'o.org_name')
-            ->orderByDesc('total_minutes');
+            ->orderByDesc('total_minutes')
+            ->orderBy('e.name', 'asc');
             
     } else {
         // Mode Default: Tampilkan semua yang pernah mengajar (Internal + External)
@@ -126,7 +127,8 @@ return new class extends Component
                   ->orWhere('t.trainer_external_name', 'like', '%' . $this->search . '%');
             })
             ->groupBy('tr.name', 'tr.nik', 't.trainer_external_name', 'o.org_name', 'p.position_name')
-            ->orderByDesc('total_minutes');
+            ->orderByDesc('total_minutes')
+            ->orderBy(DB::raw('COALESCE(tr.name, t.trainer_external_name)'), 'asc');
     }
 }
 
@@ -179,6 +181,10 @@ return new class extends Component
         }, $fileName);
     }
 
+    public function updatedPositionFilter()
+{
+    $this->resetPage();
+}
     public function render()
     {
         $positionList = DB::table('positions')
