@@ -82,26 +82,27 @@ new class extends Component
     }
 
     public function importExcel()
-    {
-        $this->validate([
-            'excel_file' => 'required|mimes:xlsx,xls|max:5048',
-        ]);
+{
+    $this->validate([
+        'excel_file' => 'required|mimes:xlsx,xls,csv,txt|max:5048',
+    ]);
 
-        try {
-            Excel::import(new EmployeeImport, $this->excel_file->getRealPath());
+    try {
+        // Tambahkan import
+        Excel::import(new EmployeeImport, $this->excel_file); // Langsung lempar object filenya
 
-            $this->reset(['show_import_modal', 'excel_file']);
-            session()->flash('status', 'Data Employee berhasil di-import!');
+        $this->reset(['show_import_modal', 'excel_file']);
+        
+        $this->dispatch('swal:success', message: 'Import Data Employee Berhasil!');
+        
+        // Gunakan redirect jika memang ingin refresh halaman total
+        return redirect()->to('/employee'); 
 
-            // Tambahkan ini untuk memicu SweetAlert2
-            $this->dispatch('swal:success', message: 'Import Data Employee Berhasil!');
-            
-            return redirect()->to('/employee'); 
-
-        } catch (\Exception $e) {
-            session()->flash('error', 'Gagal import: ' . $e->getMessage());
-        }
+    } catch (\Exception $e) {
+        // Tampilkan error yang sebenarnya terjadi di dalam file import
+        session()->flash('error', 'Detail Error: ' . $e->getMessage());
     }
+}
 
     public function exportExcel()
     {

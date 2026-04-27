@@ -5,12 +5,12 @@ use Livewire\WithPagination;
 use Livewire\WithFileUploads;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Models\Training;
+use App\Models\Employee;
 use App\Imports\UsersImport;
 use Carbon\Carbon;
 
-
 new class extends Component {
-
     use WithPagination, WithFileUploads;
 
     protected $paginationTheme = 'bootstrap';
@@ -25,25 +25,17 @@ new class extends Component {
     public $is_certified = 'No';
 
     public $trainer_type = 'internal';
-    public $trainer_employee_id = null;
-    public $selected_trainers = [];
+    public $trainer_employee_id = null; // Format: "NIK - Nama"
     public $trainer_external_name = '';
-    public $showFormModal = false;
 
     // ==============================
     // UI STATES
     // ==============================
-    public $sidebar_search = '';
-    public $dept_filter = '';
-    public $show_preview = false;
-    public $preview_employees = [];
-    public $selected_participants = [];
-    public $search_participant = '';
-
-    // ==============================
-    // IMPORT EXCEL
-    // ==============================
+    public $showFormModal = false;
     public $show_import_modal = false;
+    public $sidebar_search = '';
+    public $search_participant = '';
+    public $selected_participants = [];
     public $excel_file;
 
     public function updatingSidebarSearch()
@@ -51,114 +43,129 @@ new class extends Component {
         $this->resetPage();
     }
 
+    /**
+     * Pencarian Peserta Otomatis (Computed Property)
+     */
     public function getFilteredEmployeesProperty()
     {
         if (strlen($this->search_participant) < 2) return [];
 
-        return DB::table('employees as e')
-            ->leftJoin('organizations as o', 'e.org_id', '=', 'o.id')
-            ->where('e.name', 'like', '%' . $this->search_participant . '%')
-            ->orWhere('e.nik', 'like', '%' . $this->search_participant . '%')
-            ->select(
-                'e.id',
-                'e.name',
-                'e.nik',
-                DB::raw("IFNULL(o.org_name, 'DEPT TIDAK TERDAFTAR') as org_name")
-            )
+        return Employee::query()
+            ->leftJoin('organizations as o', 'employees.org_id', '=', 'o.id')
+            ->where(function ($q) {
+                $q->where('employees.name', 'like', '%' . $this->search_participant . '%')
+                    ->orWhere('employees.nik', 'like', '%' . $this->search_participant . '%');
+            })
+            ->select('employees.id', 'employees.name', 'employees.nik', 'o.org_name')
             ->limit(5)
             ->get();
     }
 
+    /**
+     * Menambahkan peserta ke daftar temporary di modal
+     */
     public function addSelectedParticipant($id)
     {
-        $emp = DB::table('employees as e')
-            ->leftJoin('organizations as o', 'e.org_id', '=', 'o.id')
-            ->where('e.id', $id)
-            ->select(
-                'e.id',
-                'e.name',
-                'e.nik',
-                DB::raw("IFNULL(o.org_name, 'DEPT TIDAK TERDAFTAR') as org_name")
-            )
+        $emp = Employee::query()
+            ->leftJoin('organizations as o', 'employees.org_id', '=', 'o.id')
+            ->where('employees.id', $id)
+            ->select('employees.id', 'employees.name', 'employees.nik', 'o.org_name')
             ->first();
 
         if ($emp && !collect($this->selected_participants)->contains('id', $emp->id)) {
-            $this->selected_participants[] = (array)$emp;
+            $this->selected_participants[] = [
+                'id' => $emp->id,
+                'name' => $emp->name,
+                'nik' => $emp->nik,
+                'org_name' => $emp->org_name ?? 'DEPT TIDAK TERDAFTAR'
+            ];
         }
         $this->search_participant = '';
     }
 
-    // ==============================
-    // LOAD TRAINING (PERBAIKAN DI SINI)
-    // ==============================
-    public function loadTraining($id)
-{
-    $training = DB::table('trainings')->find($id);
-    if (!$training) return;
-
-    $this->training_id = $training->id;
-    $this->title = $training->title;
-    $this->held_by = $training->held_by;
-    $this->activity_name = $training->activity_name;
-    $this->skill_name = $training->skill_name;
-    $this->training_date = $training->training_date;
-    $this->start_time = $training->start_time;
-    $this->finish_time = $training->finish_time;
-    $this->fee = $training->fee;
-    $this->is_certified = $training->is_certified ?? 'No';
-    $this->showFormModal = true;
-
-    
-    if ($training->trainer_employee_id) {
-        $this->trainer_type = 'internal';
-
-        // Cari data karyawan berdasarkan ID agar dropdown otomatis terpilih
-        $cek = DB::table('employees')->find($training->trainer_employee_id);
-
-        if ($cek) {
-            // Set format ke "NIK - Nama" agar sinkron dengan dropdown modal 
-            $this->trainer_employee_id = $cek->nik . ' - ' . $cek->name;
-        } else {
-            $this->trainer_employee_id = null;
-        }
-        $this->trainer_external_name = '';
-    } else {
-        $this->trainer_type = 'external';
-        $this->trainer_external_name = $training->trainer_external_name;
-        $this->trainer_employee_id = null;
+    /**
+     * Menghapus peserta dari daftar temporary di modal
+     */
+    public function removeParticipant($id)
+    {
+        $this->selected_participants = collect($this->selected_participants)
+            ->filter(fn($p) => $p['id'] != $id)
+            ->values()
+            ->toArray();
     }
 
-    $this->selected_participants = DB::table('training_participants as tp')
-        ->join('employees as e', 'tp.employee_id', '=', 'e.id')
-        ->leftJoin('organizations as o', 'e.org_id', '=', 'o.id')
-        ->where('tp.training_id', $id)
-        ->select(
-            'e.id',
-            'e.name',
-            'e.nik',
-            DB::raw("IFNULL(o.org_name, 'DEPT TIDAK TERDAFTAR') as org_name")
-        )
-        ->get()
-        ->map(fn($item) => (array)$item)
-        ->toArray();
-}
-
-    public function save()
+    public function loadTraining($id)
     {
-        $this->validate([
-            'title' => 'required',
-            'training_date' => 'required|date',
-            'is_certified' => 'required|in:Yes,No',
-        ]);
+        $training = Training::with(['participants.organization', 'trainerInternal'])->find($id);
+        if (!$training) return;
 
-        DB::transaction(function () {
-            $empId = null;
-            if ($this->trainer_type === 'internal' && $this->trainer_employee_id) {
+        $this->training_id = $training->id;
+        $this->title = $training->title;
+        $this->held_by = $training->held_by;
+        $this->activity_name = $training->activity_name;
+        $this->skill_name = $training->skill_name;
+        $this->training_date = $training->training_date ? $training->training_date->format('Y-m-d') : null;
+        $this->start_time = $training->start_time;
+        $this->finish_time = $training->finish_time;
+        $this->fee = $training->fee;
+        $this->is_certified = $training->is_certified ?? 'No';
+
+        // --- LOGIKA PEMISAH TRAINER ---
+        if ($training->trainer_employee_id && $training->trainerInternal) {
+            // JIKA PUNYA NIK: Masuk tab Internal
+            $this->trainer_type = 'internal';
+            $this->trainer_employee_id = $training->trainerInternal->nik . ' - ' . $training->trainerInternal->name;
+            $this->trainer_external_name = ''; // WAJIB DIKOSONGKAN
+        } else {
+            // JIKA TIDAK PUNYA NIK: Masuk tab External
+            $this->trainer_type = 'external';
+            $this->trainer_external_name = $training->trainer_external_name;
+            $this->trainer_employee_id = null; // WAJIB DIKOSONGKAN
+        }
+
+        $this->selected_participants = $training->participants->map(function ($p) {
+            return [
+                'id' => $p->id,
+                'name' => $p->name,
+                'nik' => $p->nik,
+                'org_name' => $p->organization->org_name ?? 'DEPT TIDAK TERDAFTAR'
+            ];
+        })->toArray();
+
+        $this->showFormModal = true;
+    }
+
+    /**
+     * Simpan Data (Create/Update)
+     */
+    public function save()
+{
+    $this->validate([
+        'title' => 'required',
+        'training_date' => 'required|date',
+        'is_certified' => 'required|in:Yes,No',
+    ]);
+
+    DB::transaction(function () {
+        $empId = null;
+        $extName = null;
+
+        // TENTUKAN DATA BERDASARKAN TAB YANG AKTIF
+        if ($this->trainer_type === 'internal') {
+            if ($this->trainer_employee_id) {
                 $nik = explode(' - ', $this->trainer_employee_id)[0];
-                $emp = DB::table('employees')->where('nik', $nik)->first();
+                $emp = Employee::where('nik', $nik)->first();
                 $empId = $emp ? $emp->id : null;
             }
-            $data = [
+            $extName = null; // Karena internal, nama eksternal harus dihapus
+        } else {
+            $extName = $this->trainer_external_name;
+            $empId = null; // Karena eksternal, ID internal harus dihapus
+        }
+
+        $training = Training::updateOrCreate(
+            ['id' => $this->training_id],
+            [
                 'title' => $this->title,
                 'held_by' => $this->held_by,
                 'activity_name' => $this->activity_name,
@@ -169,34 +176,55 @@ new class extends Component {
                 'fee' => $this->fee,
                 'is_certified' => $this->is_certified,
                 'trainer_employee_id' => $empId,
-                'trainer_external_name' => $this->trainer_type === 'external' ? $this->trainer_external_name : null,
-                'updated_at' => now(),
-            ];
+                'trainer_external_name' => $extName,
+            ]
+        );
 
-            if ($this->training_id) {
-                DB::table('trainings')->where('id', $this->training_id)->update($data);
-                DB::table('training_participants')->where('training_id', $this->training_id)->delete();
-                $id = $this->training_id;
-            } else {
-                $data['created_at'] = now();
-                $id = DB::table('trainings')->insertGetId($data);
-                $this->training_id = $id;
-            }
+        $participantIds = collect($this->selected_participants)->pluck('id')->toArray();
+        $training->participants()->sync($participantIds);
+    });
 
-            foreach ($this->selected_participants as $p) {
-                DB::table('training_participants')->insert([
-                    'training_id' => $id,
-                    'employee_id' => $p['id']
-                ]);
-            }
-        });
+    session()->flash('message', 'Data Berhasil Disimpan!');
+    $this->resetForm();
+    $this->showFormModal = false;
+}
 
-        session()->flash('message', 'Data berhasil disimpan!');
-        $this->resetForm();
-        $this->showFormModal = false;
+    /**
+     * Import Excel
+     */
+    public function importExcel()
+    {
+        $this->validate(['excel_file' => 'required|file|mimes:xlsx,xls,csv|max:10240']);
+
+        try {
+            Excel::import(new UsersImport, $this->excel_file);
+            $this->reset(['excel_file', 'show_import_modal']);
+            session()->flash('message', 'Import Berhasil!');
+            return redirect()->route('training-data-index');
+        } catch (\Exception $e) {
+            session()->flash('error', 'IMPORT GAGAL: ' . $e->getMessage());
+        }
     }
 
-    private function resetForm()
+    /**
+     * Delete (Soft Delete)
+     */
+    public function deleteTraining($id)
+    {
+        $training = Training::find($id);
+        if ($training) {
+            $training->delete();
+            session()->flash('message', 'Data berhasil dihapus!');
+        }
+    }
+
+    public function openCreateModal()
+    {
+        $this->resetForm();
+        $this->showFormModal = true;
+    }
+
+    public function resetForm()
     {
         $this->reset([
             'training_id',
@@ -210,63 +238,26 @@ new class extends Component {
             'fee',
             'trainer_employee_id',
             'trainer_external_name',
-            'selected_participants'
+            'selected_participants',
+            'search_participant'
         ]);
         $this->trainer_type = 'internal';
         $this->is_certified = 'No';
     }
 
-    public function openCreateModal()
-    {
-        $this->resetForm();
-        $this->showFormModal = true;
-    }
-
-    public function importExcel()
-    {
-        $this->validate(['excel_file' => 'required|file|mimes:xlsx,xls,csv|max:10240']);
-
-        try {
-            Excel::import(new UsersImport, $this->excel_file);
-            $this->reset(['excel_file', 'show_import_modal']);
-            return redirect()->route('training-data-index');
-        } catch (\Exception $e) {
-            session()->flash('error', 'IMPORT GAGAL: ' . $e->getMessage());
-        }
-    }
-
     public function with()
     {
         return [
-            'trainings' => DB::table('trainings')
+            'trainings' => Training::with(['trainerInternal']) // Ini kuncinya agar nama Pak Mangatur muncul
                 ->where('title', 'like', "%{$this->sidebar_search}%")
                 ->orderBy('training_date', 'desc')
                 ->paginate(15),
-            'employees_list' => DB::table('employees')->orderBy('name')->get(),
+            'employees_list' => Employee::orderBy('name')->get(),
         ];
     }
-
-    // ==============================
-    // ACTION METHODS
-    // ==============================
-
-    public function removeParticipant($id)
-    {
-        // Menghapus peserta dari array sementara berdasarkan ID
-        $this->selected_participants = collect($this->selected_participants)
-            ->filter(fn($p) => $p['id'] != $id)
-            ->values()
-            ->toArray();
-    }
-
-    public function deleteTraining($id)
-    {
-        // Menghapus data training dan relasi pesertanya
-        DB::transaction(function () use ($id) {
-            DB::table('training_participants')->where('training_id', $id)->delete();
-            DB::table('trainings')->where('id', $id)->delete();
-        });
-
-        session()->flash('message', 'Data training berhasil dihapus!');
-    }
 };
+
+?>
+
+<div>
+</div>

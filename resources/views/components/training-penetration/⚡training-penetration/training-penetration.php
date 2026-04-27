@@ -130,15 +130,18 @@ new class extends Component
             ->select('id', 'org_name')
             ->orderBy('org_name')
             ->get();
-        $trainings = DB::table('trainings')->select('id', 'title')->orderBy('title')->get();
+        $trainings = DB::table('trainings')
+            ->select('title') 
+            ->distinct()
+            ->orderBy('title')
+            ->get();
 
-        // Hitung Total Employee di List Table
         $orgs = DB::table('organizations as mo')
             ->select(
                 'mo.id',
                 'mo.org_name',
                 DB::raw('(SELECT COUNT(*) FROM employees WHERE org_id = mo.id AND status = "Active" AND status_employee != "Harian Lepas") as total_emp')
-    )
+            )
             ->when($this->search, function ($query) {
                 $query->where('mo.org_name', 'like', '%' . $this->search . '%');
             })
@@ -157,8 +160,9 @@ new class extends Component
             ->when($this->dateTo, function ($query) {
                 $query->where('t.training_date', '<=', $this->dateTo);
             })
+           
             ->when($this->trainingId, function ($query) {
-                $query->where('t.id', $this->trainingId);
+                $query->where('t.title', $this->trainingId);
             })
             ->groupBy('e.org_id')
             ->pluck('trained_count', 'e.org_id')

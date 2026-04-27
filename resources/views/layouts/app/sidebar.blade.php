@@ -55,6 +55,11 @@
                 {{ __('Trainer Contribution') }}
             </flux:sidebar.item>
               </flux:sidebar.group>
+              <flux:sidebar.group :heading="__('System Log')" class="grid">
+                <flux:sidebar.item icon="clock" :href="route('history')" :current="request()->routeIs('history')" wire:navigate>
+                    {{ __('History') }}
+                </flux:sidebar.item>
+            </flux:sidebar.group>
             
              
         

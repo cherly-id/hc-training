@@ -72,78 +72,81 @@ return new class extends Component
     }
 
     private function getTrainerList()
-{
-    return DB::table('trainings as t')
-        ->leftJoin('employees as tr', 't.trainer_employee_id', '=', 'tr.id')
-        ->select(DB::raw('COALESCE(tr.name, t.trainer_external_name) as name'))
-        ->distinct()
-        ->whereNotNull(DB::raw('COALESCE(tr.name, t.trainer_external_name)'))
-        ->orderBy('name', 'asc')
-        ->get();
-}
-
-    private function getBaseQuery()
-{
-    // Mode Monitoring: Jika Jabatan dipilih (Manager/Supervisor)
-    if (!empty($this->position_filter)) {
-        return DB::table('employees as e')
-            ->leftJoin('positions as p', 'e.position_id', '=', 'p.id')
-            ->leftJoin('organizations as o', 'e.org_id', '=', 'o.id')
-            ->leftJoin('trainings as t', 'e.id', '=', 't.trainer_employee_id')
-            ->select(
-                'e.name as trainer_name',
-                'e.nik',
-                DB::raw('COALESCE(p.position_name, "-") as position'),
-                DB::raw('COALESCE(o.org_name, "-") as organization'),
-                DB::raw("COALESCE(GROUP_CONCAT(DISTINCT t.activity_name SEPARATOR ', '), '-') as activity_name"),
-                DB::raw("COALESCE(GROUP_CONCAT(DISTINCT t.skill_name SEPARATOR ', '), '-') as skill_name"), // Kolom ini sudah ada
-                DB::raw('SUM(COALESCE(TIMESTAMPDIFF(MINUTE, t.start_time, t.finish_time), 0)) as total_minutes')
-            )
-            ->whereIn('p.position_name', (array)$this->position_filter)
-            ->when($this->search, fn($q) => $q->where('e.name', 'like', '%' . $this->search . '%'))
-            ->when($this->date_from, fn($q) => $q->where(fn($sub) => $sub->whereDate('t.training_date', '>=', $this->date_from)->orWhereNull('t.training_date')))
-            ->when($this->date_to, fn($q) => $q->where(fn($sub) => $sub->whereDate('t.training_date', '<=', $this->date_to)->orWhereNull('t.training_date')))
-            ->groupBy('e.id', 'e.name', 'e.nik', 'p.position_name', 'o.org_name')
-            ->orderByDesc('total_minutes')
-            ->orderBy('e.name', 'asc');
-            
-    } else {
-        // Mode Default: Tampilkan semua yang pernah mengajar (Internal + External)
+    {
         return DB::table('trainings as t')
             ->leftJoin('employees as tr', 't.trainer_employee_id', '=', 'tr.id')
-            ->leftJoin('organizations as o', 'tr.org_id', '=', 'o.id')
-            ->leftJoin('positions as p', 'tr.position_id', '=', 'p.id')
-            ->select(
-                DB::raw('COALESCE(tr.name, t.trainer_external_name) as trainer_name'),
-                'tr.nik',
-                DB::raw('COALESCE(p.position_name, "EXTERNAL") as position'),
-                DB::raw('COALESCE(o.org_name, "-") as organization'),
-                DB::raw("COALESCE(GROUP_CONCAT(DISTINCT t.activity_name SEPARATOR ', '), '-') as activity_name"),
-                DB::raw("COALESCE(GROUP_CONCAT(DISTINCT t.skill_name SEPARATOR ', '), '-') as skill_name"), // TAMBAHKAN BARIS INI
-                DB::raw('SUM(TIMESTAMPDIFF(MINUTE, t.start_time, t.finish_time)) as total_minutes')
-            )
-            ->when($this->search, function ($q) {
-                $q->where('tr.name', 'like', '%' . $this->search . '%')
-                  ->orWhere('t.trainer_external_name', 'like', '%' . $this->search . '%');
-            })
-            ->groupBy('tr.name', 'tr.nik', 't.trainer_external_name', 'o.org_name', 'p.position_name')
-            ->orderByDesc('total_minutes')
-            ->orderBy(DB::raw('COALESCE(tr.name, t.trainer_external_name)'), 'asc');
+            ->select(DB::raw('COALESCE(tr.name, t.trainer_external_name) as name'))
+            ->distinct()
+            ->whereNotNull(DB::raw('COALESCE(tr.name, t.trainer_external_name)'))
+            ->orderBy('name', 'asc')
+            ->get();
     }
-}
+
+    private function getBaseQuery()
+    {
+        // Mode Monitoring: Jika Jabatan dipilih (Manager/Supervisor)
+        if (!empty($this->position_filter)) {
+            return DB::table('employees as e')
+                ->leftJoin('positions as p', 'e.position_id', '=', 'p.id')
+                ->leftJoin('organizations as o', 'e.org_id', '=', 'o.id')
+                ->leftJoin('trainings as t', 'e.id', '=', 't.trainer_employee_id')
+                ->select(
+                    'e.name as trainer_name',
+                    'e.nik',
+                    DB::raw('COALESCE(p.position_name, "-") as position'),
+                    DB::raw('COALESCE(o.org_name, "-") as organization'),
+                    DB::raw("COALESCE(GROUP_CONCAT(DISTINCT t.activity_name SEPARATOR ', '), '-') as activity_name"),
+                    DB::raw("COALESCE(GROUP_CONCAT(DISTINCT t.skill_name SEPARATOR ', '), '-') as skill_name"), // Kolom ini sudah ada
+                    DB::raw('SUM(COALESCE(TIMESTAMPDIFF(MINUTE, t.start_time, t.finish_time), 0)) as total_minutes')
+                )
+                ->whereIn('p.position_name', (array)$this->position_filter)
+                ->when($this->search, fn($q) => $q->where('e.name', 'like', '%' . $this->search . '%'))
+                ->when($this->date_from, fn($q) => $q->where(fn($sub) => $sub->whereDate('t.training_date', '>=', $this->date_from)->orWhereNull('t.training_date')))
+                ->when($this->date_to, fn($q) => $q->where(fn($sub) => $sub->whereDate('t.training_date', '<=', $this->date_to)->orWhereNull('t.training_date')))
+                ->groupBy('e.id', 'e.name', 'e.nik', 'p.position_name', 'o.org_name')
+                ->orderByDesc('total_minutes')
+                ->orderBy('e.name', 'asc');
+        } else {
+            // Mode Default: Tampilkan semua yang pernah mengajar (Internal + External)
+            return DB::table('trainings as t')
+                ->leftJoin('employees as tr', 't.trainer_employee_id', '=', 'tr.id')
+                ->leftJoin('organizations as o', 'tr.org_id', '=', 'o.id')
+                ->leftJoin('positions as p', 'tr.position_id', '=', 'p.id')
+                ->select(
+                    DB::raw('COALESCE(tr.name, t.trainer_external_name) as trainer_name'),
+                    'tr.nik',
+                    DB::raw('COALESCE(p.position_name, "EXTERNAL") as position'),
+                    DB::raw('COALESCE(o.org_name, "-") as organization'),
+                    DB::raw("COALESCE(GROUP_CONCAT(DISTINCT t.activity_name SEPARATOR ', '), '-') as activity_name"),
+                    DB::raw("COALESCE(GROUP_CONCAT(DISTINCT t.skill_name SEPARATOR ', '), '-') as skill_name"), // TAMBAHKAN BARIS INI
+                    DB::raw('SUM(TIMESTAMPDIFF(MINUTE, t.start_time, t.finish_time)) as total_minutes')
+                )
+                ->when($this->search, function ($q) {
+                    $q->where('tr.name', 'like', '%' . $this->search . '%')
+                        ->orWhere('t.trainer_external_name', 'like', '%' . $this->search . '%');
+                })
+                ->groupBy('tr.name', 'tr.nik', 't.trainer_external_name', 'o.org_name', 'p.position_name')
+                ->orderByDesc('total_minutes')
+                ->orderBy(DB::raw('COALESCE(tr.name, t.trainer_external_name)'), 'asc');
+        }
+    }
 
     public function exportExcel()
     {
         return response()->streamDownload(function () {
             $data = $this->getBaseQuery()->get();
 
-            // Header Excel: Nama, Jabatan, Org, Activity, Skill, Total Jam
+            // 1. JUDUL LAPORAN
+            echo "TRAINER CONTRIBUTION REPORT\n";
+            echo "Periode:\t" . ($this->date_from ?? '-') . " s/d " . ($this->date_to ?? '-') . "\n";
+           echo "Tanggal Cetak:\t" . \Carbon\Carbon::now('Asia/Jakarta')->translatedFormat('d F Y | H:i') . " WIB\n";
+
+            // 2. Header Tabel
             echo "Nama Trainer\tPosition\tOrganization\tActivity\tSkill\tTotal Jam Mengajar\n";
 
             foreach ($data as $row) {
                 $hours = round(($row->total_minutes ?? 0) / 60, 2);
 
-                // Format output menggunakan Tab (\t) agar rapi di Excel
                 echo ($row->trainer_name ?? 'Tanpa Nama') . "\t" .
                     ($row->position ?? '-') . "\t" .
                     ($row->organization ?? '-') . "\t" .
@@ -156,20 +159,21 @@ return new class extends Component
 
     public function exportDetailExcel()
     {
-        // 1. Validasi awal
         if (!$this->selectedTrainerName) return;
 
         $fileName = 'Detail_Mengajar_' . str_replace(' ', '_', $this->selectedTrainerName) . '_' . date('Ymd') . '.xls';
-
-        // 2. Ambil data dari properti yang sudah diisi oleh fungsi showDetail
         $data = $this->trainerDetails;
 
         return response()->streamDownload(function () use ($data) {
-            // Excel BOM & Header
+            // 1. JUDUL DETAIL
+            echo "DETAIL RIWAYAT MENGAJAR TRAINER\n";
+            echo "Nama Trainer:\t" . $this->selectedTrainerName . "\n";
+            echo "Periode:\t" . ($this->date_from ?? '-') . " s/d " . ($this->date_to ?? '-') . "\n\n";
+
+            // 2. Header Tabel
             echo "Topik Pelatihan\tTanggal\tJam Mulai\tJam Selesai\tDurasi (Jam)\n";
 
             foreach ($data as $row) {
-                // Kita gunakan logic pembagian 60 karena minutes disimpan dalam satuan menit
                 $durationHours = round(($row->minutes ?? 0) / 60, 2);
 
                 echo ($row->title ?? '-') . "\t" .
@@ -182,9 +186,9 @@ return new class extends Component
     }
 
     public function updatedPositionFilter()
-{
-    $this->resetPage();
-}
+    {
+        $this->resetPage();
+    }
     public function render()
     {
         $positionList = DB::table('positions')

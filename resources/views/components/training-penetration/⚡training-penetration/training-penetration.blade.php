@@ -56,15 +56,16 @@
 
                     {{-- 4. Judul Training --}}
                     <div class="space-y-2">
-                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Judul Training</label>
-                        <select wire:model.live="trainingId"
-                            class="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-[11px] font-bold outline-none focus:ring-4 focus:ring-blue-50 shadow-inner text-slate-600 appearance-none cursor-pointer">
-                            <option value="">-- SEMUA JUDUL --</option>
-                            @foreach($allTrainings as $t)
-                            <option value="{{ $t->id }}">{{ $t->title }}</option>
-                            @endforeach
-                        </select>
-                    </div>
+    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Judul Training</label>
+    <select wire:model.live="trainingId"
+        class="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-[11px] font-bold outline-none focus:ring-4 focus:ring-blue-50 shadow-inner text-slate-600 appearance-none cursor-pointer">
+        <option value="">-- SEMUA JUDUL --</option>
+        @foreach($allTrainings as $t)
+            {{-- Sekarang value-nya adalah judul teks ($t->title) --}}
+            <option value="{{ $t->title }}">{{ $t->title }}</option>
+        @endforeach
+    </select>
+</div>
 
                     {{-- 5. Tombol Reset --}}
                     <div>

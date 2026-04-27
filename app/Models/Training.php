@@ -3,34 +3,49 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-// 1. IMPORT the related models if they are in the same folder or different ones
-use App\Models\Employee; 
-use App\Models\training_schedules; // Ensure this name matches your other Model file
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Training extends Model
 {
+    use SoftDeletes;
+
     protected $table = 'trainings';
 
     protected $fillable = [
-        'title', 'held_by', 'activity_id', 'skill_id', 
-        'training_date', 'start_time', 'finish_time', 'fee'
+        'title', 
+        'held_by', 
+        'activity_name', 
+        'skill_name',    
+        'training_date', 
+        'start_time', 
+        'finish_time', 
+        'fee',
+        'is_certified',
+        'trainer_employee_id',
+        'trainer_external_name'
     ];
 
-    public function participants()
+    // Penting agar format tanggal konsisten
+    protected $casts = [
+        'training_date' => 'date',
+        'fee' => 'decimal:2',
+    ];
+
+    /**
+     * Relasi ke Peserta
+     * Ini benar jika tabel pivotnya adalah training_participants
+     */
+    public function participants(): BelongsToMany
     {
         return $this->belongsToMany(Employee::class, 'training_participants', 'training_id', 'employee_id')
-                    ->withPivot('score');
-    }
-
-    public function trainers()
-    {
-        return $this->belongsToMany(Employee::class, 'trainer_training', 'training_id', 'employee_id')
+                    ->withPivot('id', 'score') // Ambil ID pivot untuk mempermudah update skor
                     ->withTimestamps();
     }
 
-    // public function schedules()
-    // {
-    //     // 2. Use PascalCase for the class name
-    //     return $this->hasMany(training_schedules::class, 'training_id', 'id');
-    // }
+    public function trainerInternal(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'trainer_employee_id');
+    }
 }

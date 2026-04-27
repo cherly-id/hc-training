@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Livewire\History\History;
 
 
 Route::get('/', function () {
@@ -53,5 +54,9 @@ Route::livewire('/avg', 'average-training')
 Route::livewire('/trnp', 'training-penetration')
     ->middleware(['auth', 'verified'])
     ->name('trnp');
+
+Route::livewire('/history', 'history.history')
+    ->middleware(['auth', 'verified'])
+    ->name('history');
 
 require __DIR__ . '/settings.php';

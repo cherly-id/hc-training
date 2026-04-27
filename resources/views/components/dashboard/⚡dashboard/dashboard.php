@@ -33,6 +33,7 @@ new class extends Component
         $chart_data = array_fill(0, 12, 0);
 
         $query = DB::table('trainings as t')
+            ->whereNull('t.deleted_at')
             ->whereYear('t.training_date', $this->filter_year)
             ->select(
                 DB::raw('MONTH(t.training_date) as bln'),
@@ -57,6 +58,7 @@ new class extends Component
         }
 
         return $chart_data;
+        
     }
 
     // Fungsi untuk mendapatkan data training penetration berdasarkan filter yang dipilih
@@ -64,9 +66,11 @@ new class extends Component
     {
         $orgs_master = DB::table('organizations')->orderBy('org_name', 'ASC')->get();
         $dataBulanan = $this->getChartData();
+        // dd($dataBulanan);
 
         // 2. KPI CARDS LOGIC
         $queryKpi = DB::table('trainings as t')
+            ->whereNull('t.deleted_at')
             ->whereYear('t.training_date', $this->filter_year);
 
         // Filter Bulan (Hanya untuk KPI Cards, tidak untuk chart)
@@ -92,23 +96,26 @@ new class extends Component
 
         // Hitung Jam Pelatihan (Jam Sesi)
         $total_hours = round(($kpi->total_mins ?? 0) / 60, 1);
+        // dd($kpi);
 
-        // --- PERBAIKAN DI SINI ---
+
         // Hitung Karyawan Aktif yang sebenarnya
-        $empQuery = DB::table('employees')->where('status', 'Active');
+        $empQuery = DB::table('employees')
+            ->where('status', 'Active')
+            ->whereNull('deleted_at');
         if ($this->filter_org !== 'all') {
             $empQuery->where('org_id', $this->filter_org);
         }
-        
+
         $total_employees = $empQuery->count(); // Mengambil jumlah asli (0 jika kosong)
 
         // Hitung rata-rata dengan pengecekan agar tidak division by zero
-        $avg_training_hours = ($total_employees > 0) 
-            ? round($total_hours / $total_employees, 2) 
+        $avg_training_hours = ($total_employees > 0)
+            ? round($total_hours / $total_employees, 2)
             : 0;
         // -------------------------
 
-        // 3. DATA TRAINING PENETRATION (Tabel Bawah)
+       // 3. DATA TRAINING PENETRATION (Tabel Bawah)
         $penetration_list = DB::table('organizations as o')
             ->when($this->filter_org !== 'all', fn($q) => $q->where('o.id', $this->filter_org))
             ->select([
@@ -118,13 +125,16 @@ new class extends Component
                 'total_emp' => DB::table('employees')
                     ->selectRaw('count(*)')
                     ->whereColumn('org_id', 'o.id')
-                    ->where('status', 'Active'),
+                    ->where('status', 'Active')
+                    ->whereNull('deleted_at'), 
                 // Subquery Karyawan yang sudah training
                 'trained_emp' => DB::table('training_participants as tp')
                     ->join('employees as e', 'tp.employee_id', '=', 'e.id')
                     ->join('trainings as t', 'tp.training_id', '=', 't.id')
                     ->selectRaw('count(distinct tp.employee_id)')
                     ->whereColumn('e.org_id', 'o.id')
+                    ->whereNull('e.deleted_at')
+                    ->whereNull('t.deleted_at')
                     ->whereYear('t.training_date', $this->filter_year)
                     ->when($this->filter_month !== 'all', fn($q) => $q->whereMonth('t.training_date', $this->filter_month))
             ])
@@ -147,10 +157,18 @@ new class extends Component
             'total_employees' => $total_employees,
             'penetration_list' => $penetration_list,
             'months' => [
-                '01' => 'Januari', '02' => 'Februari', '03' => 'Maret',
-                '04' => 'April', '05' => 'Mei', '06' => 'Juni',
-                '07' => 'Juli', '08' => 'Agustus', '09' => 'September',
-                '10' => 'Oktober', '11' => 'November', '12' => 'Desember'
+                '01' => 'Januari',
+                '02' => 'Februari',
+                '03' => 'Maret',
+                '04' => 'April',
+                '05' => 'Mei',
+                '06' => 'Juni',
+                '07' => 'Juli',
+                '08' => 'Agustus',
+                '09' => 'September',
+                '10' => 'Oktober',
+                '11' => 'November',
+                '12' => 'Desember'
             ]
         ];
     }

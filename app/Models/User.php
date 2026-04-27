@@ -8,9 +8,12 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
+use Illuminate\Database\Eloquent\SoftDeletes;
+// use Illuminate\Database\Eloquent\Prunable;
 
 class User extends Authenticatable
 {
+    use SoftDeletes; 
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable, TwoFactorAuthenticatable;
 
@@ -63,6 +66,12 @@ class User extends Authenticatable
             ->map(fn ($word) => Str::substr($word, 0, 1))
             ->implode('');
     }
+
+    // public function prunable()
+    // {
+    //     // Ambil data yang sudah di-soft delete lebih dari 30 hari
+    //     return static::where('deleted_at', '<=', now()->subDays(30));
+    // }
 }
    /**
  * Relasi ke model Position (difungsikan sebagai Role)
